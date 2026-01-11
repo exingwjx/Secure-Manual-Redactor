@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Redactor Pro V3</title>
+    <style>
+        /* CSS Variables for Theming */
+        :root {
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --editor-bg: #ffffff;
+            --editor-text: #000000;
+            --border-color: #ccc;
+            --toolbar-bg: #ffffff;
+            --primary: #d32f2f; /* Red */
+            --accent: #007bff; /* Blue */
+        }
+
+        /* Dark Mode Overrides */
+        body.dark-mode {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --editor-bg: #1e1e1e;
+            --editor-text: #e0e0e0;
+            --border-color: #444;
+            --toolbar-bg: #2c2c2c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 10px 20px;
+            box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s;
+            overflow: hidden; /* Prevent body scroll, handle inside editor */
+        }
+
+        h1 { margin: 10px 0; font-size: 1.4rem; }
+        
+        /* Toolbar Styling */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            background: var(--toolbar-bg);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 100%;
+            max-width: 1100px;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 5px;
+            border-right: 1px solid var(--border-color);
+            padding-right: 10px;
+            margin-right: 5px;
+            align-items: center;
+        }
+        .btn-group:last-child { border-right: none; }
+
+        button {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            background-color: var(--editor-bg);
+            color: var(--text-color);
+            font-weight: 500;
+        }
+        button:hover { background-color: rgba(0,0,0,0.1); }
+        button:active { transform: translateY(1px); }
+
+        #btn-redact {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: bold;
+        }
+        #btn-redact:hover { background-color: #b71c1c; }
+
+        #btn-copy {
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+        }
+        #btn-copy:hover { background-color: #1b5e20; }
+
+        /* Editor Area */
+        .editor-wrapper {
+            width: 100%;
+            max-width: 1100px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0; /* Important for Flexbox scrolling */
+        }
+        
+        textarea {
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Courier New', Courier, monospace;
+            line-height: 1.5;
+            resize: none;
+            box-sizing: border-box;
+            background-color: var(--editor-bg);
+            color: var(--editor-text);
+            transition: background-color 0.3s, color 0.3s, font-size 0.2s;
+            overflow-y: auto; /* Force scrollbar here */
+        }
+        textarea:focus { outline: 2px solid var(--accent); }
+
+        .status-bar {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--text-color);
+            opacity: 0.8;
+            height: 20px;
+            text-align: center;
+        }
+
+        ::selection { background-color: #ffeb3b; color: black; }
+    </style>
+</head>
+<body>
+
+    <h1>🛡️ Secure Manual Redactor</h1>
+    
+    <div class="toolbar">
+        <div class="btn-group">
+            <button id="btn-redact" onclick="redactSelection()" title="Double click a word, then click here">
+                ✂️ Replace Selected with "XXX"
+            </button>
+        </div>
+
+        <div class="btn-group">
+            <button onclick="toggleTheme()" title="Toggle Day/Night Mode">🌗 Theme</button>
+            <button onclick="changeFontSize(2)" title="Increase Font">A+</button>
+            <button onclick="resetFontSize()" title="Default Font">A</button>
+            <button onclick="changeFontSize(-2)" title="Decrease Font">A-</button>
+        </div>
+
+        <div class="btn-group">
+            <button onclick="scrollToTop()" title="Go to Top">⬆️ Top</button>
+            <button onclick="scrollToBottom()" title="Go to Bottom">⬇️ Bot</button>
+        </div>
+
+        <div class="btn-group">
+            <button onclick="clearAll()">🗑️ Clear</button>
+            <button id="btn-copy" onclick="copyAll()">📋 Copy All</button>
+        </div>
+    </div>
+
+    <div class="editor-wrapper">
+        <textarea id="editor" spellcheck="false" placeholder="INSTRUCTIONS:
+1. Paste patient text here.
+2. Double-click a private word (Name, MRN, etc.) to select it.
+3. Click the Red 'Replace' button. ALL instances of that word will turn to XXX.
+4. Use the controls above to adjust view."></textarea>
+    </div>
+
+    <div class="status-bar" id="status">Ready. Secure environment.</div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const status = document.getElementById('status');
+        let currentFontSize = 16;
+
+        function redactSelection() {
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const text = editor.value;
+            const selectedText = text.substring(start, end);
+
+            if (!selectedText || selectedText.trim() === "") {
+                showStatus("⚠️ No text selected. Double-click a word first.", "red");
+                return;
+            }
+
+            const escapedText = selectedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escapedText, 'gi');
+
+            const matches = text.match(regex);
+            const count = matches ? matches.length : 0;
+
+            const newText = text.replace(regex, 'XXX');
+            editor.value = newText;
+
+            editor.selectionStart = start;
+            editor.selectionEnd = start + 3;
+
+            showStatus(`✅ Replaced ${count} instance(s) of "${selectedText}" with "XXX".`, "green");
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            showStatus(isDark ? "Switched to Night Mode 🌙" : "Switched to Day Mode ☀️");
+        }
+
+        function changeFontSize(delta) {
+            currentFontSize += delta;
+            if (currentFontSize < 10) currentFontSize = 10;
+            if (currentFontSize > 40) currentFontSize = 40;
+            applyFontSize();
+        }
+
+        function resetFontSize() {
+            currentFontSize = 16;
+            applyFontSize();
+        }
+
+        function applyFontSize() {
+            editor.style.fontSize = currentFontSize + 'px';
+            showStatus(`Font size: ${currentFontSize}px`);
+        }
+
+        // --- FIXED SCROLL LOGIC ---
+        function scrollToTop() {
+            // 1. Move the visual scroll to top
+            editor.scrollTop = 0;
+            // 2. Move the actual cursor to 0,0 (start)
+            // This prevents the browser from jumping back down when we focus
+            editor.setSelectionRange(0, 0);
+            editor.focus();
+            showStatus("Scrolled to Top ⬆️");
+        }
+
+        function scrollToBottom() {
+            // 1. Move visual scroll to bottom
+            editor.scrollTop = editor.scrollHeight;
+            // 2. Move actual cursor to the very end of text
+            const len = editor.value.length;
+            editor.setSelectionRange(len, len);
+            editor.focus();
+            showStatus("Scrolled to Bottom ⬇️");
+        }
+
+        function clearAll() {
+            if (confirm("Are you sure you want to clear all text?")) {
+                editor.value = "";
+                showStatus("Text cleared.");
+                editor.focus();
+            }
+        }
+
+        function copyAll() {
+            if (!editor.value) return;
+            navigator.clipboard.writeText(editor.value).then(() => {
+                const copyBtn = document.getElementById('btn-copy');
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = "✅ Copied!";
+                copyBtn.style.backgroundColor = "#1b5e20";
+                setTimeout(() => {
+                    copyBtn.innerText = originalText;
+                    copyBtn.style.backgroundColor = "#2e7d32";
+                }, 2000);
+                showStatus("Content copied to clipboard.");
+            });
+        }
+
+        function showStatus(msg, color = "") {
+            status.innerText = msg;
+            status.style.color = color || "var(--text-color)";
+            if (color) {
+                setTimeout(() => {
+                    status.style.color = "var(--text-color)";
+                }, 3000);
+            }
+        }
+    </script>
+
+</body>
+</html>
