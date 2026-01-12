@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Redactor Pro V3</title>
+    <title>Secure Redactor Pro V4</title>
     <style>
-        /* CSS Variables for Theming */
+        /* CSS Variables */
         :root {
             --bg-color: #f4f4f9;
             --text-color: #333;
@@ -15,9 +15,11 @@
             --toolbar-bg: #ffffff;
             --primary: #d32f2f; /* Red */
             --accent: #007bff; /* Blue */
+            --input-bg: #fff;
+            --input-text: #333;
         }
 
-        /* Dark Mode Overrides */
+        /* Dark Mode */
         body.dark-mode {
             --bg-color: #121212;
             --text-color: #e0e0e0;
@@ -25,6 +27,8 @@
             --editor-text: #e0e0e0;
             --border-color: #444;
             --toolbar-bg: #2c2c2c;
+            --input-bg: #333;
+            --input-text: #fff;
         }
 
         body {
@@ -39,12 +43,12 @@
             padding: 10px 20px;
             box-sizing: border-box;
             transition: background-color 0.3s, color 0.3s;
-            overflow: hidden; /* Prevent body scroll, handle inside editor */
+            overflow: hidden;
         }
 
         h1 { margin: 10px 0; font-size: 1.4rem; }
         
-        /* Toolbar Styling */
+        /* Toolbar */
         .toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -60,6 +64,7 @@
             width: 100%;
             max-width: 1100px;
             justify-content: center;
+            align-items: center;
             transition: background-color 0.3s;
         }
 
@@ -83,9 +88,26 @@
             background-color: var(--editor-bg);
             color: var(--text-color);
             font-weight: 500;
+            white-space: nowrap;
         }
         button:hover { background-color: rgba(0,0,0,0.1); }
         button:active { transform: translateY(1px); }
+
+        /* Search Input Styling */
+        #findInput {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            width: 120px;
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            transition: width 0.2s;
+        }
+        #findInput:focus {
+            outline: 2px solid var(--accent);
+            width: 150px;
+        }
 
         #btn-redact {
             background-color: var(--primary);
@@ -110,7 +132,7 @@
             display: flex;
             flex-direction: column;
             position: relative;
-            min-height: 0; /* Important for Flexbox scrolling */
+            min-height: 0;
         }
         
         textarea {
@@ -127,7 +149,7 @@
             background-color: var(--editor-bg);
             color: var(--editor-text);
             transition: background-color 0.3s, color 0.3s, font-size 0.2s;
-            overflow-y: auto; /* Force scrollbar here */
+            overflow-y: auto;
         }
         textarea:focus { outline: 2px solid var(--accent); }
 
@@ -148,36 +170,46 @@
     <h1>🛡️ Secure Manual Redactor</h1>
     
     <div class="toolbar">
+        <!-- Group 1: Find -->
         <div class="btn-group">
-            <button id="btn-redact" onclick="redactSelection()" title="Double click a word, then click here">
-                ✂️ Replace Selected with "XXX"
+            <input type="text" id="findInput" placeholder="Find text..." onkeydown="checkEnter(event)">
+            <button onclick="findNext()" title="Find Next Occurrence">🔍</button>
+        </div>
+
+        <!-- Group 2: The Main Action -->
+        <div class="btn-group">
+            <button id="btn-redact" onclick="redactSelection()" title="Replace Selection with XXX">
+                ✂️ Replace
             </button>
         </div>
 
+        <!-- Group 3: View Controls -->
         <div class="btn-group">
-            <button onclick="toggleTheme()" title="Toggle Day/Night Mode">🌗 Theme</button>
+            <button onclick="toggleTheme()" title="Toggle Day/Night Mode">🌗</button>
             <button onclick="changeFontSize(2)" title="Increase Font">A+</button>
             <button onclick="resetFontSize()" title="Default Font">A</button>
             <button onclick="changeFontSize(-2)" title="Decrease Font">A-</button>
         </div>
 
+        <!-- Group 4: Navigation -->
         <div class="btn-group">
-            <button onclick="scrollToTop()" title="Go to Top">⬆️ Top</button>
-            <button onclick="scrollToBottom()" title="Go to Bottom">⬇️ Bot</button>
+            <button onclick="scrollToTop()" title="Go to Top">⬆️</button>
+            <button onclick="scrollToBottom()" title="Go to Bottom">⬇️</button>
         </div>
 
+        <!-- Group 5: File Actions -->
         <div class="btn-group">
-            <button onclick="clearAll()">🗑️ Clear</button>
-            <button id="btn-copy" onclick="copyAll()">📋 Copy All</button>
+            <button onclick="clearAll()">🗑️</button>
+            <button id="btn-copy" onclick="copyAll()">📋 Copy</button>
         </div>
     </div>
 
     <div class="editor-wrapper">
         <textarea id="editor" spellcheck="false" placeholder="INSTRUCTIONS:
 1. Paste patient text here.
-2. Double-click a private word (Name, MRN, etc.) to select it.
-3. Click the Red 'Replace' button. ALL instances of that word will turn to XXX.
-4. Use the controls above to adjust view."></textarea>
+2. Type a word in the 'Find' box (e.g., 'John') and hit Enter to find it.
+3. Click '✂️ Replace' to turn ALL occurrences of 'John' into XXX.
+4. Or manually double-click words to select them."></textarea>
     </div>
 
     <div class="status-bar" id="status">Ready. Secure environment.</div>
@@ -185,8 +217,56 @@
     <script>
         const editor = document.getElementById('editor');
         const status = document.getElementById('status');
+        const findInput = document.getElementById('findInput');
         let currentFontSize = 16;
 
+        // --- Find Logic ---
+        function checkEnter(event) {
+            if (event.key === "Enter") {
+                findNext();
+            }
+        }
+
+        function findNext() {
+            const query = findInput.value;
+            if (!query) {
+                showStatus("⚠️ Type text to find first.", "red");
+                return;
+            }
+
+            const text = editor.value;
+            // Start searching AFTER the current cursor position
+            // This allows us to find the "Next" one
+            const startPos = editor.selectionEnd;
+            
+            // Case insensitive search logic
+            const lowerText = text.toLowerCase();
+            const lowerQuery = query.toLowerCase();
+
+            // 1. Search forward from cursor
+            let index = lowerText.indexOf(lowerQuery, startPos);
+
+            // 2. If not found, wrap around to the top
+            if (index === -1) {
+                index = lowerText.indexOf(lowerQuery, 0);
+                if (index !== -1) showStatus("🔄 Wrapped to top.");
+            }
+
+            // 3. Handle Result
+            if (index !== -1) {
+                editor.focus();
+                editor.setSelectionRange(index, index + query.length);
+                
+                // If we didn't wrap, show found
+                if (status.innerText !== "🔄 Wrapped to top.") {
+                    showStatus(`🔍 Found: "${query}"`);
+                }
+            } else {
+                showStatus(`❌ "${query}" not found.`, "red");
+            }
+        }
+
+        // --- Redaction Logic ---
         function redactSelection() {
             const start = editor.selectionStart;
             const end = editor.selectionEnd;
@@ -194,7 +274,7 @@
             const selectedText = text.substring(start, end);
 
             if (!selectedText || selectedText.trim() === "") {
-                showStatus("⚠️ No text selected. Double-click a word first.", "red");
+                showStatus("⚠️ No text selected. Find or Highlight word first.", "red");
                 return;
             }
 
@@ -207,18 +287,21 @@
             const newText = text.replace(regex, 'XXX');
             editor.value = newText;
 
+            // Restore cursor roughly where it was
             editor.selectionStart = start;
             editor.selectionEnd = start + 3;
 
             showStatus(`✅ Replaced ${count} instance(s) of "${selectedText}" with "XXX".`, "green");
         }
 
+        // --- Theme Logic ---
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
             const isDark = document.body.classList.contains('dark-mode');
             showStatus(isDark ? "Switched to Night Mode 🌙" : "Switched to Day Mode ☀️");
         }
 
+        // --- Font Logic ---
         function changeFontSize(delta) {
             currentFontSize += delta;
             if (currentFontSize < 10) currentFontSize = 10;
@@ -236,30 +319,27 @@
             showStatus(`Font size: ${currentFontSize}px`);
         }
 
-        // --- FIXED SCROLL LOGIC ---
+        // --- Scroll Logic ---
         function scrollToTop() {
-            // 1. Move the visual scroll to top
             editor.scrollTop = 0;
-            // 2. Move the actual cursor to 0,0 (start)
-            // This prevents the browser from jumping back down when we focus
             editor.setSelectionRange(0, 0);
             editor.focus();
             showStatus("Scrolled to Top ⬆️");
         }
 
         function scrollToBottom() {
-            // 1. Move visual scroll to bottom
             editor.scrollTop = editor.scrollHeight;
-            // 2. Move actual cursor to the very end of text
             const len = editor.value.length;
             editor.setSelectionRange(len, len);
             editor.focus();
             showStatus("Scrolled to Bottom ⬇️");
         }
 
+        // --- File Actions ---
         function clearAll() {
             if (confirm("Are you sure you want to clear all text?")) {
                 editor.value = "";
+                findInput.value = "";
                 showStatus("Text cleared.");
                 editor.focus();
             }
@@ -290,6 +370,6 @@
             }
         }
     </script>
- 
+
 </body>
 </html>
